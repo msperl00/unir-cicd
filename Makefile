@@ -1,5 +1,3 @@
-.PHONY: all $(MAKECMDGOALS)
-
 build:
 	docker build -t calculator-app .
 	docker build -t calc-web ./web
@@ -13,9 +11,12 @@ test-unit:
 	docker rm unit-tests || true
 
 test-api:
+	docker network rm calc-test-api || true
 	docker network create calc-test-api || true
-	docker run -d --network calc-test-api --env PYTHONPATH=/opt/calc --name apiserver --env FLASK_APP=app/api.py -p 5000:5000 -w /opt/calc calculator-app:latest flask run --host=0.0.0.0
-	docker run --network calc-test-api --name api-tests --env PYTHONPATH=/opt/calc --env BASE_URL=http://apiserver:5000/ -w /opt/calc calculator-app:latest pytest --junit-xml=results/api_result.xml -m api  || true
+	docker stop apiserver || true
+	docker rm apiserver || true
+	docker run -d --network calc-test-api --env PYTHONPATH=/opt/calc --name apiserver --env FLASK_APP=app/api.py -p 5001:5000 -w /opt/calc calculator-app:latest flask run --host=0.0.0.0
+	docker run --network calc-test-api --name api-tests --env PYTHONPATH=/opt/calc --env BASE_URL=http://apiserver:5000/ -w /opt/calc calculator-app:latest pytest --junit-xml=results/api_result.xml -m api || true
 	docker cp api-tests:/opt/calc/results ./
 	docker stop apiserver || true
 	docker rm --force apiserver || true
@@ -24,6 +25,7 @@ test-api:
 	docker network rm calc-test-api || true
 
 test-e2e:
+	docker network rm calc-test-e2e || true
 	docker network create calc-test-e2e || true
 	docker stop apiserver || true
 	docker rm --force apiserver || true
@@ -49,10 +51,9 @@ run-web:
 stop-web:
 	docker stop calc-web
 
-
 start-sonar-server:
 	docker network create calc-sonar || true
-	docker run -d --rm --stop-timeout 60 --network calc-sonar --name sonarqube-server -p 9000:9000 --volume `pwd`/sonar/data:/opt/sonarqube/data --volume `pwd`/sonar/logs:/opt/sonarqube/logs sonarqube:8.3.1-community
+	docker run -d --rm --stop-timeout 60 --network calc-sonar --name sonarqube-server -p 9000:9000 --volume `pwd`/sonar/data:/opt/sonarqube/data --volume `pwd`/sonarqube/logs:/opt/sonarqube/logs sonarqube:8.3.1-community
 
 stop-sonar-server:
 	docker stop sonarqube-server
@@ -63,7 +64,6 @@ start-sonar-scanner:
 
 pylint:
 	docker run --rm --volume `pwd`:/opt/calc --env PYTHONPATH=/opt/calc -w /opt/calc calculator-app:latest pylint app/ | tee results/pylint_result.txt
-
 
 deploy-stage:
 	docker stop apiserver || true
